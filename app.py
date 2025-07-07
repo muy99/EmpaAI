@@ -22,11 +22,15 @@ if "generated" not in st.session_state:
 
 # === Depression classifier ===
 def detect_depression(text):
-    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    outputs = bert_model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    label = torch.argmax(probs, dim=1).item()
-    return label, probs[0][label].item()
+    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True).to("cpu")
+    bert_model.to("cpu")  # ← Force model to CPU
+    with torch.no_grad():
+        outputs = bert_model(**inputs)
+        probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+        label = torch.argmax(probs, dim=1).item()
+        confidence = probs[0][label].item()
+    return label, confidence
+
 
 # === Chatbot reply ===
 def chatbot_reply(user_input, label):
