@@ -71,8 +71,13 @@ if user_input:
     label, confidence = detect_depression(user_input)
     response = chatbot_reply(user_input, label)
 
-    if label == 1 and confidence > 0.85:
-        response += "\n\n⚠️ Consider talking to someone you trust or reaching out to NHS or Mind UK."
+   if label == 1 and confidence > 0.85:
+    response += (
+        "\n\n⚠️ **You're not alone.** Please consider talking to someone you trust "
+        "or getting support from a professional.\n\n"
+        "[🧠 Visit NHS Mental Health Services](https://www.nhs.uk/nhs-services/mental-health-services/)"
+    )
+
 
     st.session_state.past.insert(0, user_input)
     st.session_state.generated.insert(0, response)
