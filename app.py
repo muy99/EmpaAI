@@ -6,7 +6,7 @@ from streamlit_chat import message
 import os
 
 # === Load BERT model ===
-bert_model_path = "src/empaAI_bert_model"  # Adjust if outside src/
+bert_model_path = "empaAI_bert_model"  # Adjust if outside src/
 bert_model = BertForSequenceClassification.from_pretrained(bert_model_path)
 bert_tokenizer = BertTokenizer.from_pretrained(bert_model_path)
 
