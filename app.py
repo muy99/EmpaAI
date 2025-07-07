@@ -5,22 +5,14 @@ from transformers import BertTokenizer, BertForSequenceClassification
 from streamlit_chat import message
 import os
 
-# === Cached model loading ===
-@st.cache_resource
-def load_bert_model():
-    model = BertForSequenceClassification.from_pretrained("empaAI_bert_model")
-    tokenizer = BertTokenizer.from_pretrained("empaAI_bert_model")
-    model.to("cpu")
-    return model, tokenizer
+# === Load BERT model ===
+bert_model_path = "empaAI_bert_model"
+bert_model = BertForSequenceClassification.from_pretrained(bert_model_path)
+bert_tokenizer = BertTokenizer.from_pretrained(bert_model_path)
 
-@st.cache_resource
-def load_chat_model():
-    tokenizer = AutoTokenizer.from_pretrained("microsoft/GODEL-v1_1-base-seq2seq")
-    model = AutoModelForSeq2SeqLM.from_pretrained("microsoft/GODEL-v1_1-base-seq2seq")
-    return model, tokenizer
-
-bert_model, bert_tokenizer = load_bert_model()
-chat_model, chat_tokenizer = load_chat_model()
+# === Load GODEL chatbot ===
+chat_tokenizer = AutoTokenizer.from_pretrained("microsoft/GODEL-v1_1-base-seq2seq")
+chat_model = AutoModelForSeq2SeqLM.from_pretrained("microsoft/GODEL-v1_1-base-seq2seq")
 
 # === Session state ===
 if "past" not in st.session_state:
@@ -30,7 +22,8 @@ if "generated" not in st.session_state:
 
 # === Depression classifier ===
 def detect_depression(text):
-    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True).to("cpu")
+    bert_model.to("cpu")
     with torch.no_grad():
         outputs = bert_model(**inputs)
         probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
@@ -40,31 +33,27 @@ def detect_depression(text):
 
 # === Chatbot reply ===
 def chatbot_reply(user_input, label):
-    context = user_input.strip()
-    if not context:
-        return "I'm here whenever you want to talk. 😊"
-
-    prompt = (
-        "Instruction: You are a compassionate and supportive chatbot trained to help users who feel low or emotionally distressed.\n"
-        if label == 1 else
-        "Instruction: You are a cheerful and friendly chatbot. Respond with positivity and encouragement.\n"
-    ) + f"Context: {context}\nResponse:"
+    if label == 1:
+        prompt = f"Instruction: Respond empathetically and supportively. Context: {user_input.strip()} Response:"
+    else:
+        prompt = f"Instruction: Respond cheerfully and positively. Context: {user_input.strip()} Response:"
 
     input_ids = chat_tokenizer.encode(prompt, return_tensors="pt", truncation=True)
     output_ids = chat_model.generate(
         input_ids,
         max_length=100,
         do_sample=True,
-        top_p=0.9,
-        temperature=0.6,
+        top_p=0.85,
+        temperature=0.7,
         num_return_sequences=1,
-        repetition_penalty=1.2
+        repetition_penalty=1.1
     )
 
     response = chat_tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
-
     if "Response:" in response:
-        response = response.split("Response:")[-1].strip()
+        parts = response.split("Response:")
+        response = parts[-1].strip() if len(parts) > 1 else response.strip()
+    response = response.replace(">", "").strip()
 
     if not response:
         response = "Thanks for sharing. I'm here if you need me." if label == 1 else "That sounds great!"
@@ -85,16 +74,18 @@ if user_input:
     if label == 1 and confidence > 0.85:
         response += "\n\n⚠️ Consider talking to someone you trust or reaching out to NHS or Mind UK."
 
-    st.session_state.past.append(user_input)
-    st.session_state.generated.append(response)
+    st.session_state.past.insert(0, user_input)
+    st.session_state.generated.insert(0, response)
 
-    # Save log locally
-    os.makedirs("chat_logs", exist_ok=True)
-    with open("chat_logs/chat_log.csv", "a", encoding="utf-8") as f:
-        f.write(f'"{user_input}","{response}",{label},{confidence:.2f}\n')
+    try:
+        os.makedirs("chat_logs", exist_ok=True)
+        with open("chat_logs/chat_log.csv", "a", encoding="utf-8") as f:
+            f.write(f'"{user_input}","{response}",{label},{confidence:.2f}\n')
+    except Exception:
+        pass
 
-# === Chat history (reversed) ===
+# === Chat history (most recent on top) ===
 if st.session_state.generated:
-    for i in reversed(range(len(st.session_state.generated))):
+    for i in range(len(st.session_state.generated)):
         message(st.session_state.past[i], is_user=True, key=f"user_{i}")
         message(st.session_state.generated[i], key=f"bot_{i}")
