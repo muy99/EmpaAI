@@ -19,6 +19,10 @@ if "past" not in st.session_state:
     st.session_state.past = []
 if "generated" not in st.session_state:
     st.session_state.generated = []
+if "labels" not in st.session_state:
+    st.session_state.labels = []
+if "confidences" not in st.session_state:
+    st.session_state.confidences = []
 
 # === Depression classifier ===
 def detect_depression(text):
@@ -70,18 +74,22 @@ if user_input:
     label, confidence = detect_depression(user_input)
     response = chatbot_reply(user_input, label)
 
-    # ✅ NHS support only for confident & long depressive inputs
+    # Append chat history
+    st.session_state.past.insert(0, user_input)
+    st.session_state.generated.insert(0, response)
+    st.session_state.labels.insert(0, label)
+    st.session_state.confidences.insert(0, confidence)
+
+    # Show support links if appropriate
     if label == 1 and confidence > 0.85 and len(user_input.split()) > 6:
-        response += (
+        st.session_state.generated[0] += (
             "\n\n⚠️ **You're not alone.** Please consider talking to someone you trust "
             "or getting support from a professional.\n\n"
             "[🧠 Visit NHS Mental Health Services](https://www.nhs.uk/nhs-services/mental-health-services/)\n"
             "📞 Or call Samaritans UK at **116 123** (free, 24/7)"
         )
 
-    st.session_state.past.insert(0, user_input)
-    st.session_state.generated.insert(0, response)
-
+    # Save chat log
     try:
         os.makedirs("chat_logs", exist_ok=True)
         with open("chat_logs/chat_log.csv", "a", encoding="utf-8") as f:
@@ -89,8 +97,15 @@ if user_input:
     except Exception:
         pass
 
-# === Chat history (most recent on top) ===
+# === Chat history (most recent on top) with confidence meter ===
 if st.session_state.generated:
     for i in range(len(st.session_state.generated)):
         message(st.session_state.past[i], is_user=True, key=f"user_{i}")
         message(st.session_state.generated[i], key=f"bot_{i}")
+
+        label = st.session_state.labels[i]
+        confidence = st.session_state.confidences[i]
+        label_str = "Depressed" if label == 1 else "Happy"
+        st.markdown(f"**Prediction:** {label_str} | **Confidence:** {confidence:.2f}")
+        st.progress(confidence)
+        st.markdown("---")
