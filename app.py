@@ -51,8 +51,7 @@ def chatbot_reply(user_input, label):
 
     response = chat_tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
     if "Response:" in response:
-        parts = response.split("Response:")
-        response = parts[-1].strip() if len(parts) > 1 else response.strip()
+        response = response.split("Response:")[-1].strip()
     response = response.replace(">", "").strip()
 
     if not response:
@@ -71,7 +70,8 @@ if user_input:
     label, confidence = detect_depression(user_input)
     response = chatbot_reply(user_input, label)
 
-    if label == 1 and confidence > 0.85:
+    # ✅ NHS support only for confident & long depressive inputs
+    if label == 1 and confidence > 0.85 and len(user_input.split()) > 6:
         response += (
             "\n\n⚠️ **You're not alone.** Please consider talking to someone you trust "
             "or getting support from a professional.\n\n"
