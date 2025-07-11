@@ -4,6 +4,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from transformers import BertTokenizer, BertForSequenceClassification
 from streamlit_chat import message
 import os
+import random
 
 # === Load BERT model ===
 bert_model_path = "empaAI_bert_model"
@@ -26,7 +27,8 @@ if "confidences" not in st.session_state:
 
 # === Depression classifier ===
 def detect_depression(text):
-    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True).to("cpu")
+    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    inputs = {k: v.to("cpu") for k, v in inputs.items()}
     bert_model.to("cpu")
     with torch.no_grad():
         outputs = bert_model(**inputs)
@@ -36,11 +38,9 @@ def detect_depression(text):
     return label, confidence
 
 # === Chatbot reply ===
-def chatbot_reply(user_input, label):
-    if label == 1:
-        prompt = f"Instruction: Respond empathetically and supportively. Context: {user_input.strip()} Response:"
-    else:
-        prompt = f"Instruction: Respond cheerfully and positively. Context: {user_input.strip()} Response:"
+def chatbot_reply(user_input, label, context=""):
+    instruction = "Respond empathetically and supportively." if label == 1 else "Respond cheerfully and positively."
+    prompt = f"Instruction: {instruction} Context: {context} {user_input.strip()} Response:"
 
     input_ids = chat_tokenizer.encode(prompt, return_tensors="pt", truncation=True)
     output_ids = chat_model.generate(
@@ -49,17 +49,28 @@ def chatbot_reply(user_input, label):
         do_sample=True,
         top_p=0.85,
         temperature=0.7,
-        num_return_sequences=1,
+        num_return_sequences=3,
         repetition_penalty=1.1
     )
 
-    response = chat_tokenizer.decode(output_ids[0], skip_special_tokens=True).strip()
+    # Pick one randomly for diversity
+    responses = [chat_tokenizer.decode(out, skip_special_tokens=True).strip() for out in output_ids]
+    response = random.choice(responses)
     if "Response:" in response:
         response = response.split("Response:")[-1].strip()
     response = response.replace(">", "").strip()
 
     if not response:
         response = "Thanks for sharing. I'm here if you need me." if label == 1 else "That sounds great!"
+
+    # Occasionally mix in human warmth
+    if label == 1 and random.random() < 0.3:
+        templates = [
+            "Thank you for sharing this with me.",
+            "I'm really sorry you're going through this.",
+            "You are not alone — I'm here for you."
+        ]
+        response = random.choice(templates) + " " + response
 
     response += " 💙" if label == 1 else " 😊"
     return response
@@ -72,7 +83,11 @@ user_input = st.text_input("You:", key="input")
 
 if user_input:
     label, confidence = detect_depression(user_input)
-    response = chatbot_reply(user_input, label)
+
+    # Build short context from past 2 user inputs
+    context = " ".join(st.session_state.past[:2][::-1]) if len(st.session_state.past) >= 2 else ""
+
+    response = chatbot_reply(user_input, label, context)
 
     # Append chat history
     st.session_state.past.insert(0, user_input)
@@ -80,8 +95,9 @@ if user_input:
     st.session_state.labels.insert(0, label)
     st.session_state.confidences.insert(0, confidence)
 
-    # Show support links if appropriate
-    if label == 1 and confidence > 0.85 and len(user_input.split()) > 6:
+    # Stronger NHS trigger: check length, confidence, and severe words
+    severe_words = ["suicidal", "worthless", "can't go on", "no way out"]
+    if label == 1 and confidence > 0.9 and len(user_input.split()) > 6 and any(word in user_input.lower() for word in severe_words):
         st.session_state.generated[0] += (
             "\n\n⚠️ **You're not alone.** Please consider talking to someone you trust "
             "or getting support from a professional.\n\n"
@@ -97,7 +113,7 @@ if user_input:
     except Exception:
         pass
 
-# === Chat history (most recent on top) with confidence meter ===
+# === Chat history with confidence meter ===
 if st.session_state.generated:
     for i in range(len(st.session_state.generated)):
         message(st.session_state.past[i], is_user=True, key=f"user_{i}")
