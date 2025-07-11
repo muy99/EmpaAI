@@ -84,6 +84,12 @@ user_input = st.text_input("You:", key="input")
 if user_input:
     label, confidence = detect_depression(user_input)
 
+    # 🔥 TEMPORARY FIX: force Happy if positive words found
+    positive_keywords = ["happy", "amazing", "great", "love", "worth living", "excited", "grateful"]
+    if any(word in user_input.lower() for word in positive_keywords):
+        label = 0
+        confidence = 1.0
+
     # Build short context from past 2 user inputs
     context = " ".join(st.session_state.past[:2][::-1]) if len(st.session_state.past) >= 2 else ""
 
