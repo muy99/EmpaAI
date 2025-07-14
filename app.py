@@ -5,7 +5,7 @@ from langdetect import detect
 
 # === CONFIG ===
 # Replace with your Hugging Face Hub path or local folder
-model_path = 'username/empaAI-bert-model'  # e.g., 'myuser/empaAI-bert-model'
+model_path = 'muy99/EmpAI'  # e.g., 'myuser/empaAI-bert-model'
 
 # === Load model + tokenizer ===
 tokenizer = AutoTokenizer.from_pretrained(model_path)
