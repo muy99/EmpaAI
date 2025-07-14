@@ -1,5 +1,4 @@
 streamlit
-transformers
 torch
-scikit-learn
-streamlit-chat
+transformers
+langdetect
